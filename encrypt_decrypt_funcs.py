@@ -18,12 +18,13 @@ def keyGen(size, salt=None):
 	
 	# Salts should be randomly generated
 	if salt==None:
-		salt = os.urandom(16)
+		#salt = os.urandom(16)
+		salt=b'10'
 	# derive
 	
 	kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=size, salt=salt, iterations=100000, backend=backend)
 	key = kdf.derive(pwd)
-	return key,salt
+	return key
 	
 def decrypt(algoritmo, mode, filename):
 
@@ -31,12 +32,12 @@ def decrypt(algoritmo, mode, filename):
 	output_file = "decrypted_" + filename
 	fout = open(output_file, "wb")
 
-	salt=fin.readline()
+	#salt=fin.readline()
 
-	txt = fin.readlines() #reads the remaining
+	txt = fin.read() #reads the remaining
 	
 	if isinstance(txt,list):
-		#print(type(txt),len(txt),AES.block_size)
+		print(type(txt),len(txt),AES.block_size)
 		txt=bytes(txt)
 
 	
@@ -45,7 +46,7 @@ def decrypt(algoritmo, mode, filename):
 			m=DES3.MODE_CBC
 		if mode=='ECB':
 			m=DES3.MODE_ECB
-		key,salt = keyGen(24,salt)
+		key= keyGen(24)
 		cipher = DES3.new(key, m)
 		data = unpad(cipher.decrypt(txt), DES3.block_size)
 
@@ -55,7 +56,7 @@ def decrypt(algoritmo, mode, filename):
 			m=AES.MODE_CBC
 		if mode=='GCM':
 			m=AES.MODE_GCM
-		key,salt = keyGen(16,salt)
+		key=keyGen(16)
 		cipher = AES.new(key, m)
 		data = unpad(cipher.decrypt(txt), AES.block_size)
 		
@@ -89,7 +90,7 @@ def encrypt(algoritmo, mode, filename):
 			m=DES3.MODE_CBC
 		if mode=='ECB':
 			m=DES3.MODE_ECB
-		key,salt = keyGen(24)
+		key= keyGen(24)
 		cipher = DES3.new(key, m)
 		text=pad(txt,DES3.block_size)
 
@@ -100,7 +101,7 @@ def encrypt(algoritmo, mode, filename):
 			m=AES.MODE_CBC
 		if mode=='GCM':
 			m=AES.MODE_GCM
-		key,salt = keyGen(16)
+		key= keyGen(16)
 		cipher = AES.new(key, m)
 		text=pad(txt,AES.block_size)
 			
@@ -112,7 +113,7 @@ def encrypt(algoritmo, mode, filename):
 	# Store the salt somewhere in the file
 	#header = {'salt':salt}
 	#h=json.dumps(header)
-	fout.write(salt)
+	#fout.write(salt+"\n")
 				
 		
 	#enc = padder.update(txt)
