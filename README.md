@@ -6,6 +6,7 @@
 
 ## Modos de Cifra suportados:
 * CBC
+* ECB
 * GCM
 
 ## Algoritmos de Síntese suportados:

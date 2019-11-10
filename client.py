@@ -4,21 +4,6 @@ import base64
 import argparse
 import coloredlogs, logging
 import os
-import sys
-
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import dh
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from cryptography.hazmat.primitives.serialization import ParameterFormat
-from cryptography.hazmat.primitives.serialization import Encoding
-
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.backends import default_backend
-from Crypto.Cipher import DES3
-from Crypto.Cipher import AES
-from cryptography.hazmat.primitives import padding
 
 logger = logging.getLogger('root')
 
@@ -45,9 +30,6 @@ class ClientProtocol(asyncio.Protocol):
         self.state = STATE_CONNECT  # Initial State
         self.buffer = ''  # Buffer to receive data chunks
 
-        self.parameters = dh.generate_parameters(generator=2, key_size=512, backend=default_backend())
-        self.private_key = self.parameters.generate_private_key()
-
     def connection_made(self, transport) -> None:
         """
         Called when the client connects.
@@ -55,6 +37,7 @@ class ClientProtocol(asyncio.Protocol):
         :param transport: The transport stream to use for this client
         :return: No return
         """
+        #################Estabilishing encryption process
         algString=''
         #####
         dh=input("Use Diffie-Hellman?\n1)Yes\n2)No\n")
@@ -93,17 +76,20 @@ class ClientProtocol(asyncio.Protocol):
         if integ not in (1,2):
             exit(0)
         if integ==1:
-            algString+="SHA-256;"
+            algString+="SHA-256"
         else:
-            algString+="SHA-512;"
+            algString+="SHA-512"
         #####
         print(algString)
-
+        #######################################
+        if dh==1:
+            pass #handle DH
         self.transport = transport
+        message = {'type': 'ALGORITHMS', 'alg_list': algString}
+        self._send(message)
+        logger.debug('Sent desired algorithms to server')
 
-        # message = {'type': 'HANDSHAKE', 'parameters' : self.parameters}
-        # self._send_param(message)
-        
+
         message = {'type': 'OPEN', 'file_name': self.file_name}
         self._send(message)
 
@@ -124,7 +110,7 @@ class ClientProtocol(asyncio.Protocol):
         try:
             self.buffer += data.decode()
         except:
-            logger.exception('Could not decode data from server')
+            logger.exception('Could not decode data from client')
 
         idx = self.buffer.find('\r\n')
 
@@ -136,10 +122,9 @@ class ClientProtocol(asyncio.Protocol):
             idx = self.buffer.find('\r\n')
 
         if len(self.buffer) > 4096 * 1024 * 1024:  # If buffer is larger than 4M
-            logger.warning('Buffer too large')
+            logger.warning('Buffer to large')
             self.buffer = ''
             self.transport.close()
-
 
     def on_frame(self, frame: str) -> None:
         """
@@ -165,7 +150,6 @@ class ClientProtocol(asyncio.Protocol):
                 self.send_file(self.file_name)
             elif self.state == STATE_DATA:  # Got an OK during a message transfer.
                 # Reserved for future use
-                logger.debug("FRAME FIXE: {}".format(frame))
                 pass
             else:
                 logger.warning("Ignoring message from server")
@@ -219,95 +203,8 @@ class ClientProtocol(asyncio.Protocol):
         """
         logger.debug("Send: {}".format(message))
 
-        message['payload'] = message['type']
-        message['type'] = 'SECURE_X'
-
-
-        
-
         message_b = (json.dumps(message) + '\r\n').encode()
-
-        # encrypt our message with a key (secure)
-        padder = padding.PKCS7(128).padder()
-        unpadder = padding.PKCS7(128).unpadder()
-
-        key = self.pwd_alias(24, b"secure")
-        cipher = DES3.new(key, DES3.MODE_CFB)
-        decipher = DES3.new(key, DES3.MODE_CFB)
-
-        padded = padder.update(message_b)
-        ciphered = cipher.encrypt(padded)
-
-
-        unpadded = unpadder.update(ciphered)
-
-        deciphered = decipher.decrypt(unpadded)
-
-
-        logger.debug(deciphered)
-
-        self.transport.write(ciphered)
-
-    def _send_param(self, message: str) -> None:
-        """
-        Effectively encodes and sends parameters for DH
-        New function because json.dumps doesnt work for obj type parameters
-        :param message:
-        :return:
-        """
-        logger.debug("Shaking hands 8) {}".format(message))
-        oof = self.parameters.parameter_bytes(Encoding.PEM, ParameterFormat.PKCS3)
-        # message['parameters'] = oof
-
-        message_b = (json.dumps(message, default=lambda o: self.parameters.parameter_bytes(Encoding.PEM, ParameterFormat.PKCS3)) + '\r\n').encode()
         self.transport.write(message_b)
-
-
-
-    def pwd_alias(self, size, pwd):
-        backend = default_backend()
-
-        # Salts should be randomly generated
-        salt = b"10"
-
-        # derive
-        kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=size, salt=salt, iterations=100000, backend=backend)
-        key = kdf.derive(pwd)
-        return key
-	
-
-    ## Encrypts self.filename and writes it on another file
-    def encrypt(self, algoritmo, pwd):
-
-        padder = padding.PKCS7(128).padder()
-        
-        fin = open(self.file_name, "rb")
-        output_file = "encrypted_" + file_name
-        fout = open(output_file, "wb")
-        txt = fin.read()
-
-        
-        if algoritmo == '3DES':
-            key = pwd_alias(24, pwd)
-            cipher = DES3.new(key, DES3.MODE_CFB)
-
-                
-        elif algoritmo == 'AES':
-            key = pwd_alias(16, pwd)
-            cipher = AES.new(key, AES.MODE_ECB)
-                
-       
-        else:
-            print("Algoritmo nao suportado. Aborting..")
-            sys.exit(0)	
-                    
-            
-        enc = padder.update(txt)
-        fout.write(cipher.encrypt(enc))
-        
-        fin.close()
-        fout.close()
-        return 0
 
 
 def main():
