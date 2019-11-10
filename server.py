@@ -5,7 +5,23 @@ import argparse
 import coloredlogs, logging
 import re
 import os
+import sys
 from aio_tcpserver import tcp_server
+
+
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import dh
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.primitives.serialization import ParameterFormat
+from cryptography.hazmat.primitives.serialization import Encoding
+
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.backends import default_backend
+from Crypto.Cipher import DES3
+from Crypto.Cipher import AES
+from cryptography.hazmat.primitives import padding
 
 logger = logging.getLogger('root')
 
@@ -30,6 +46,7 @@ class ClientHandler(asyncio.Protocol):
 		self.storage_dir = storage_dir
 		self.buffer = ''
 		self.peername = ''
+		
 
 	def connection_made(self, transport) -> None:
 		"""
@@ -53,6 +70,8 @@ class ClientHandler(asyncio.Protocol):
         :return:
         """
 		logger.debug('Received: {}'.format(data))
+		data = self.decrypt_msg(data, '3DES', b'secure')
+
 		try:
 			self.buffer += data.decode()
 		except:
@@ -222,6 +241,9 @@ class ClientHandler(asyncio.Protocol):
 		return True
 
 
+	def process_parameters(self, message: str) -> bool:
+		pass
+
 	def _send(self, message: str) -> None:
 		"""
 		Effectively encodes and sends a message
@@ -232,6 +254,51 @@ class ClientHandler(asyncio.Protocol):
 
 		message_b = (json.dumps(message) + '\r\n').encode()
 		self.transport.write(message_b)
+
+
+	def pwd_alias(self, size, pwd):
+		backend = default_backend()
+        
+        # Salts should be randomly generated
+		salt = b"10"
+        # derive
+        
+		kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=size, salt=salt, iterations=100000, backend=backend)
+		key = kdf.derive(pwd)
+		return key
+	
+
+	def decrypt(self, data, outputfile, pwd):
+		fout = open(outputfile, "wb")
+
+		key = self.pwd_alias(24, pwd)
+		cipher = DES3.new(key, DES3.MODE_CFB)
+		txt = cipher.decrypt(data)
+
+		fout.write(txt)
+
+
+	def decrypt_msg(self, data, algoritmo, pwd):
+
+		# unpadder = padding.PKCS7(128).unpadder()
+		# data = unpadder.update(data)
+
+		if algoritmo == '3DES':
+			key = self.pwd_alias(24, pwd)
+			cipher = DES3.new(key, DES3.MODE_CFB)
+
+				
+		elif algoritmo == 'AES':
+			key = self.pwd_alias(16, pwd)
+			cipher = AES.new(key, AES.MODE_ECB)
+                  
+		else:
+			print("Algoritmo nao suportado. Aborting..")
+			sys.exit(0)	
+
+		logger.debug(cipher.decrypt(data))
+		return cipher.decrypt(data)
+
 
 def main():
 	global storage_dir
