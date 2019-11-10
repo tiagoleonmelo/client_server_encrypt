@@ -37,6 +37,50 @@ class ClientProtocol(asyncio.Protocol):
         :param transport: The transport stream to use for this client
         :return: No return
         """
+        algString=''
+        #####
+        dh=input("Use Diffie-Hellman?\n1)Yes\n2)No\n")
+        dh=int(dh)
+        if dh not in (1,2):
+            exit(0)
+        if dh==1:
+            algString+='DH;'
+        #####
+        alg=input("Encryption Algorithm?\n1)AES-128\n2)3DES\n")
+        alg=int(alg)
+        if alg not in (1,2):
+            exit(0)
+        if alg==1:
+            algString+="AES-128;"
+        else:
+            algString+="3DES;"
+        #####
+        if alg==1:
+            mode=input("Encryption mode?\n1)CBC\n2)GCM\n")
+        else:
+            mode=input("Encryption mode?\n1)CBC\n2)ECB\n")
+        mode=int(mode)
+        if mode not in (1,2):
+            exit(0)
+        if mode==1:
+            algString+="CBC;"
+        else:
+            if alg==1:
+                algString+="GCM;"
+            else:
+                algString+="ECB;"
+        #####
+        integ=input("Integrity control?\n1)SHA-256\n2)SHA-512\n")
+        integ=int(integ)
+        if integ not in (1,2):
+            exit(0)
+        if integ==1:
+            algString+="SHA-256;"
+        else:
+            algString+="SHA-512;"
+        #####
+        print(algString)
+
         self.transport = transport
 
         message = {'type': 'OPEN', 'file_name': self.file_name}
