@@ -6,6 +6,7 @@ import coloredlogs, logging
 import re
 import os
 from aio_tcpserver import tcp_server
+from encrypt_decrypt_funcs import *
 
 logger = logging.getLogger('root')
 

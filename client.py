@@ -4,6 +4,7 @@ import base64
 import argparse
 import coloredlogs, logging
 import os
+from encrypt_decrypt_funcs import *
 
 logger = logging.getLogger('root')
 
