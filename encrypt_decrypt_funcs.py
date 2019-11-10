@@ -9,6 +9,7 @@ from Crypto.Cipher import DES3
 from Crypto.Cipher import AES
 from cryptography.hazmat.primitives import padding
 from Crypto.Cipher import ChaCha20
+from Crypto.Util.Padding import pad, unpad
 
 def keyGen(size, salt=None):
 	pwd = getpass("Password?")
@@ -30,10 +31,13 @@ def decrypt(algoritmo, mode, filename):
 	output_file = "decrypted_" + filename
 	fout = open(output_file, "wb")
 
-	jsonSalt=fin.readline()
-	print(jsonSalt)#handle TODO
+	salt=fin.readline()
 
 	txt = fin.readlines() #reads the remaining
+	
+	if isinstance(txt,list):
+		#print(type(txt),len(txt),AES.block_size)
+		txt=bytes(txt)
 
 	
 	if algoritmo == '3DES':
@@ -41,8 +45,9 @@ def decrypt(algoritmo, mode, filename):
 			m=DES3.MODE_CBC
 		if mode=='ECB':
 			m=DES3.MODE_ECB
-		key,salt = keyGen(24,jsonSalt)
+		key,salt = keyGen(24,salt)
 		cipher = DES3.new(key, m)
+		data = unpad(cipher.decrypt(txt), DES3.block_size)
 
 			
 	elif algoritmo == 'AES-128':
@@ -50,8 +55,9 @@ def decrypt(algoritmo, mode, filename):
 			m=AES.MODE_CBC
 		if mode=='GCM':
 			m=AES.MODE_GCM
-		key,salt = keyGen(16,jsonSalt)
+		key,salt = keyGen(16,salt)
 		cipher = AES.new(key, m)
+		data = unpad(cipher.decrypt(txt), AES.block_size)
 		
 			
 	else:
@@ -59,7 +65,7 @@ def decrypt(algoritmo, mode, filename):
 		sys.exit(0)	
 				
 		
-	data = cipher.decrypt(txt)
+	
 
 	fout.write(data)
 	
@@ -70,7 +76,7 @@ def decrypt(algoritmo, mode, filename):
 
 
 def encrypt(algoritmo, mode, filename):
-	padder = padding.PKCS7(128).padder()
+	#padder = padding.PKCS7(128).padder()
 	
 	fin = open(filename, "rb")
 	output_file = "encrypted_" + filename
@@ -85,11 +91,8 @@ def encrypt(algoritmo, mode, filename):
 			m=DES3.MODE_ECB
 		key,salt = keyGen(24)
 		cipher = DES3.new(key, m)
+		text=pad(txt,DES3.block_size)
 
-		# Store the salt somewhere in the file
-		header = {'salt':salt}
-		h = json.dumps(header)
-		fout.write(h)
 
 			
 	elif algoritmo == 'AES-128':
@@ -99,20 +102,27 @@ def encrypt(algoritmo, mode, filename):
 			m=AES.MODE_GCM
 		key,salt = keyGen(16)
 		cipher = AES.new(key, m)
-		
-		# Store the salt somewhere in the file
-		header = {'salt':salt}
-		h = json.dumps(header)
-		fout.write(h)
+		text=pad(txt,AES.block_size)
 			
 	else:
 		print("Algoritmo nao suportado. Aborting..")
-		sys.exit(0)	
+		sys.exit(0)
+	
+
+	# Store the salt somewhere in the file
+	#header = {'salt':salt}
+	#h=json.dumps(header)
+	fout.write(salt)
 				
 		
-	enc = padder.update(txt)
-	fout.write(cipher.encrypt(enc))
+	#enc = padder.update(txt)
+	fout.write(cipher.encrypt(text))
 	
 	fin.close()
 	fout.close()
 	return 0
+
+
+filename="ola.txt"
+encrypt('AES-128','CBC',filename)
+decrypt('AES-128','CBC',"encrypted_" + filename)
