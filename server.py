@@ -31,8 +31,12 @@ class ClientHandler(asyncio.Protocol):
 		self.storage_dir = storage_dir
 		self.buffer = ''
 		self.peername = ''
+
+		self.cipher = ''
+		self.mode = ''
+		self.sintese = ''
         ## TODO: Pre-implementaçao de chaves publicas pq relatorio
-		
+
 
 	def connection_made(self, transport) -> None:
 		"""
@@ -91,6 +95,21 @@ class ClientHandler(asyncio.Protocol):
 			logger.exception("Could not decode JSON message: {}".format(frame))
 			self.transport.close()
 			return
+
+
+
+		mtype = message.get('type', "").upper()
+
+		if mtype == 'SECURE_X':
+			old_hash = message['hash']
+			message = self.process_payload(message['iv'], message['payload'])
+			message = json.loads(message)
+			
+			hashed_msg = sintese(self.sintese, json.dumps(message).encode())
+			if hashed_msg != old_hash:
+				print("Error decoding message")
+				# close connection
+				self.transport.close()
 
 		mtype = message.get('type', "").upper()
 
@@ -192,7 +211,6 @@ class ClientHandler(asyncio.Protocol):
 				logger.debug("Invalid message. No data found")
 				return False
 
-			## Decode data here
 			bdata = base64.b64decode(message['data'])
 
 
@@ -232,23 +250,41 @@ class ClientHandler(asyncio.Protocol):
 			return False
 
 		algs=algList.split(';')
-		#print(algs)
+		logger.debug(algs)
 		if len(algs)==3:
-			if algs[0] not in ("AES-128","3DES") and algs[1] not in ("CBC","GCM","ECB") and algs[2] not in ("SHA-256","SHA-512"):
-				print('error')
-				exit(0)
+			if algs[0] not in ("AES-128","3DES") or algs[1] not in ("CBC","GCM","ECB") or algs[2] not in ("SHA-256","SHA-512"):
+				print('Unsupported algorithm, shutting down connection')
+				self.transport.close()
+				return False
+
+			self.cipher = algs[0]
+			self.mode = algs[1]
+			self.sintese = algs[2]
+			
 		elif len(algs)==4:
 			#uses dh
-			if algs[0]!="DH" and algs[1] not in ("AES-128","3DES") and algs[2] not in ("CBC","GCM","ECB") and algs[3] not in ("SHA-256","SHA-512"):
-				print('error')
-				exit(0)
+			if algs[0]!="DH" or algs[1] not in ("AES-128","3DES") or algs[2] not in ("CBC","GCM","ECB") or algs[3] not in ("SHA-256","SHA-512"):
+				print('Unsupported algorithm, shutting down connection')
+				self.transport.close()
+				return False
+
+			self.cipher = algs[1]
+			self.mode = algs[2]
+			self.sintese = algs[3]
+
 		#
 		self._send({'type': 'OK'})
 
+
 		return True
 
-	def process_secure(self, message: str) -> bool:
-		pass
+	def process_payload(self, iv, payload: str) -> bool:
+
+		# Converting back to binary
+		real_iv = base64.b64decode(iv.encode())
+		real_payload = base64.b64decode(payload.encode())
+
+		return decrypt(self.cipher, self.mode, real_payload, real_iv).decode()
 
 	def process_close(self, message: str) -> bool:
 		"""

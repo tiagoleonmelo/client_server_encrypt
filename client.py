@@ -222,8 +222,9 @@ class ClientProtocol(asyncio.Protocol):
 
             secure = {}
             payload, iv = encrypt(self.cipher, self.mode, json.dumps(message).encode())
-            secure['payload'] = base64.b64encode(payload).decode()
             
+            secure['payload'] = base64.b64encode(payload).decode()
+            secure['iv'] = base64.b64encode(iv).decode()
             secure['type'] = 'SECURE_X'
             secure['hash'] = sintese(self.sintese, json.dumps(message).encode()) # TODO: + self.resultado_DH
             message = secure

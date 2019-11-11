@@ -74,7 +74,7 @@ def decrypt(algoritmo, mode, data, iv):
 	
 	# fin.close()
 	# fout.close()
-	return 0
+	return data
 
 
 def encrypt(algoritmo, mode, data):
