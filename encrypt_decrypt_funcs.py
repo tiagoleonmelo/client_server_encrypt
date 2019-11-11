@@ -7,11 +7,11 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.backends import default_backend
 from Crypto.Cipher import DES3
 from Crypto.Cipher import AES
-from cryptography.hazmat.primitives import padding
 from Crypto.Cipher import ChaCha20
 from Crypto.Util.Padding import pad, unpad
 from Crypto.Random import get_random_bytes
-
+from cryptography.hazmat.primitives import hashes
+from Crypto.Hash import SHA256, SHA512
 
 def keyGen(size, salt=None):
 	pwd = getpass("Password?")
@@ -27,14 +27,13 @@ def keyGen(size, salt=None):
 	kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=size, salt=salt, iterations=100000, backend=backend)
 	key = kdf.derive(pwd)
 	return key
-	
+
+
 def decrypt(algoritmo, mode, filename, iv):
 
 	fin = open(filename, "rb")
 	output_file = "decrypted_" + filename
 	fout = open(output_file, "wb")
-
-	#salt=fin.readline()
 
 	txt = fin.read() #reads the remaining
 	
@@ -79,7 +78,6 @@ def decrypt(algoritmo, mode, filename, iv):
 
 
 def encrypt(algoritmo, mode, filename):
-	#padder = padding.PKCS7(128).padder()
 	
 	fin = open(filename, "rb")
 	output_file = "encrypted_" + filename
@@ -132,6 +130,16 @@ def encrypt(algoritmo, mode, filename):
 	return iv
 
 
-filename="ola.txt"
-iv = encrypt('AES-128','GCM',filename)
-decrypt('AES-128','GCM',"encrypted_" + filename, iv)
+def sintese(algoritmo, data):
+
+	if algoritmo == "SHA-256":
+		h = SHA256.new(data)
+
+	elif algoritmo == "SHA-512":
+		h = SHA512.new(data)
+
+	else:
+		print("ERROR: Unsupported algorithm")
+		sys.exit(0)
+
+	return h.digest()

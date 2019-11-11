@@ -31,6 +31,8 @@ class ClientHandler(asyncio.Protocol):
 		self.storage_dir = storage_dir
 		self.buffer = ''
 		self.peername = ''
+        ## TODO: Pre-implementaçao de chaves publicas pq relatorio
+		
 
 	def connection_made(self, transport) -> None:
 		"""
@@ -190,8 +192,8 @@ class ClientHandler(asyncio.Protocol):
 				logger.debug("Invalid message. No data found")
 				return False
 
-			bdata = base64.b64decode(message['data'])
 			## Decode data here
+			bdata = base64.b64decode(message['data'])
 
 
 
@@ -245,6 +247,8 @@ class ClientHandler(asyncio.Protocol):
 
 		return True
 
+	def process_secure(self, message: str) -> bool:
+		pass
 
 	def process_close(self, message: str) -> bool:
 		"""

@@ -30,6 +30,12 @@ class ClientProtocol(asyncio.Protocol):
         self.loop = loop
         self.state = STATE_CONNECT  # Initial State
         self.buffer = ''  # Buffer to receive data chunks
+        
+        self.cipher = ''
+        self.mode = ''
+        self.sintese = ''
+        
+        ## TODO: Pre-implementaçao de chaves publicas pq relatorio
 
     def connection_made(self, transport) -> None:
         """
@@ -53,9 +59,12 @@ class ClientProtocol(asyncio.Protocol):
         if alg not in (1,2):
             exit(0)
         if alg==1:
-            algString+="AES-128;"
+            self.cipher="AES-128"
         else:
-            algString+="3DES;"
+            self.cipher="3DES"
+
+        algString+=self.cipher+";"
+
         #####
         if alg==1:
             mode=input("Encryption mode?\n1)CBC\n2)GCM\n")
@@ -65,21 +74,25 @@ class ClientProtocol(asyncio.Protocol):
         if mode not in (1,2):
             exit(0)
         if mode==1:
-            algString+="CBC;"
+            self.mode="CBC"
         else:
             if alg==1:
-                algString+="GCM;"
+                self.mode="GCM"
             else:
-                algString+="ECB;"
+                self.mode="ECB"
+
+        algString+=self.mode + ";"
         #####
         integ=input("Integrity control?\n1)SHA-256\n2)SHA-512\n")
         integ=int(integ)
         if integ not in (1,2):
             exit(0)
         if integ==1:
-            algString+="SHA-256"
+            self.sintese = 'SHA-256'
         else:
-            algString+="SHA-512"
+            self.sintese = 'SHA-512'
+
+        algString+=self.sintese
         #####
         print(algString)
         #######################################
@@ -187,10 +200,11 @@ class ClientProtocol(asyncio.Protocol):
             while True:
                 data = f.read(16 * 60)
                 ## Aplicar aqui as funçoes de cifra e de sintese
-
                 
 
                 message['data'] = base64.b64encode(data).decode()
+
+                ## CIFRAS A MSG AQUI E DEPOIS SINTESE
                 self._send(message)
 
                 if len(data) != read_size:
@@ -207,6 +221,16 @@ class ClientProtocol(asyncio.Protocol):
         :return:
         """
         logger.debug("Send: {}".format(message))
+
+        if message['type'] != 'ALGORITHMS':
+
+            secure = {}
+            secure['payload'] = json.dumps(message).encode() #cipher this msg using self.cipher + self.mode
+            secure['type'] = 'SECURE_X'
+            secure['hash'] = sintese(self.sintese, json.dumps(message).encode()) # TODO: + self.resultado_DH
+            message = secure
+
+        message = base64.b64encode(message).encode()
 
         message_b = (json.dumps(message) + '\r\n').encode()
         self.transport.write(message_b)
