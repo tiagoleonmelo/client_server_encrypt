@@ -114,7 +114,7 @@ class ClientHandler(asyncio.Protocol):
 			message = self.process_payload(message['iv'], message['payload'])
 			message = json.loads(message)
 			
-			hashed_msg = sintese(self.sintese, json.dumps(message).encode())
+			hashed_msg = sintese(self.sintese, json.dumps(message).encode() + self.derived_key)
 			if hashed_msg != old_hash:
 				print("Error decoding message")
 				# close connection
