@@ -198,13 +198,10 @@ class ClientProtocol(asyncio.Protocol):
             message = {'type': 'DATA', 'data': None}
             read_size = 16 * 60
             while True:
-                data = f.read(16 * 60)
-                ## Aplicar aqui as funçoes de cifra e de sintese
-                
+                data = f.read(16 * 60)                
 
                 message['data'] = base64.b64encode(data).decode()
 
-                ## CIFRAS A MSG AQUI E DEPOIS SINTESE
                 self._send(message)
 
                 if len(data) != read_size:
@@ -220,17 +217,18 @@ class ClientProtocol(asyncio.Protocol):
         :param message:
         :return:
         """
-        logger.debug("Send: {}".format(message))
 
         if message['type'] != 'ALGORITHMS':
 
             secure = {}
-            secure['payload'] = json.dumps(message).encode() #cipher this msg using self.cipher + self.mode
+            payload, iv = encrypt(self.cipher, self.mode, json.dumps(message).encode())
+            secure['payload'] = base64.b64encode(payload).decode()
+            
             secure['type'] = 'SECURE_X'
             secure['hash'] = sintese(self.sintese, json.dumps(message).encode()) # TODO: + self.resultado_DH
             message = secure
 
-        message = base64.b64encode(message).encode()
+        logger.debug("Send: {}".format(message))
 
         message_b = (json.dumps(message) + '\r\n').encode()
         self.transport.write(message_b)

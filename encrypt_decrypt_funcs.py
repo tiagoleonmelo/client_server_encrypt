@@ -29,13 +29,13 @@ def keyGen(size, salt=None):
 	return key
 
 
-def decrypt(algoritmo, mode, filename, iv):
+def decrypt(algoritmo, mode, data, iv):
 
-	fin = open(filename, "rb")
-	output_file = "decrypted_" + filename
-	fout = open(output_file, "wb")
+	# fin = open(filename, "rb")
+	# output_file = "decrypted_" + filename
+	# fout = open(output_file, "wb")
 
-	txt = fin.read() #reads the remaining
+	txt = data
 	
 	if isinstance(txt,list):
 		print(type(txt),len(txt),AES.block_size)
@@ -70,19 +70,19 @@ def decrypt(algoritmo, mode, filename, iv):
 		
 	
 
-	fout.write(data)
+	# fout.write(data)
 	
-	fin.close()
-	fout.close()
+	# fin.close()
+	# fout.close()
 	return 0
 
 
-def encrypt(algoritmo, mode, filename):
+def encrypt(algoritmo, mode, data):
 	
-	fin = open(filename, "rb")
-	output_file = "encrypted_" + filename
-	fout = open(output_file, "wb")
-	txt = fin.read()
+	# fin = open(filename, "rb")
+	# output_file = "encrypted_" + filename
+	# fout = open(output_file, "wb")
+	txt = data
 
 	iv=0
 
@@ -122,12 +122,13 @@ def encrypt(algoritmo, mode, filename):
 	#fout.write(salt+"\n")
 
 
-	fout.write(cipher.encrypt(text))
-
+	# fout.write(cipher.encrypt(text))
+	encrypted = cipher.encrypt(text)
 	
-	fin.close()
-	fout.close()
-	return iv
+	# fin.close()
+	# fout.close()
+	
+	return encrypted, iv
 
 
 def sintese(algoritmo, data):
@@ -142,4 +143,4 @@ def sintese(algoritmo, data):
 		print("ERROR: Unsupported algorithm")
 		sys.exit(0)
 
-	return h.digest()
+	return h.hexdigest()
