@@ -5,6 +5,12 @@ import argparse
 import coloredlogs, logging
 import os
 from encrypt_decrypt_funcs import *
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import dh
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.primitives.serialization import Encoding, ParameterFormat
+from cryptography.hazmat.primitives.asymmetric.dh import DHParameters
 
 logger = logging.getLogger('root')
 
@@ -30,6 +36,10 @@ class ClientProtocol(asyncio.Protocol):
         self.loop = loop
         self.state = STATE_CONNECT  # Initial State
         self.buffer = ''  # Buffer to receive data chunks
+
+        self.parameters = dh.generate_parameters(generator=2, key_size=512,
+                                    backend=default_backend())
+
         
         self.cipher = ''
         self.mode = ''
@@ -99,7 +109,11 @@ class ClientProtocol(asyncio.Protocol):
         if dh==1:
             pass #handle DH
         self.transport = transport
-        message = {'type': 'ALGORITHMS', 'alg_list': algString}
+
+        sendable_params = base64.b64encode(self.parameters.parameter_bytes(Encoding.PEM, ParameterFormat.PKCS3)).decode()
+
+        
+        message = {'type': 'ALGORITHMS', 'alg_list': algString, 'params': sendable_params}
         self._send(message)
         logger.debug('Sent desired algorithms to server')
 

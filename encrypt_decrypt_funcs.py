@@ -2,6 +2,7 @@ import os
 import sys
 from getpass import getpass
 import json
+import secrets
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.backends import default_backend
@@ -79,16 +80,13 @@ def decrypt(algoritmo, mode, data, iv):
 
 def encrypt(algoritmo, mode, data):
 	
-	# fin = open(filename, "rb")
-	# output_file = "encrypted_" + filename
-	# fout = open(output_file, "wb")
 	txt = data
 
-	iv=0
+	iv = secrets.token_bytes(16)
 
 	if algoritmo == '3DES':
 		key= keyGen(24)
-		iv = get_random_bytes(8)
+		iv = secrets.token_bytes(8)
 		if mode=='CBC':
 			m=DES3.MODE_CBC
 			cipher = DES3.new(key, m,iv)
@@ -100,7 +98,6 @@ def encrypt(algoritmo, mode, data):
 
 			
 	elif algoritmo == 'AES-128':
-		iv = get_random_bytes(16)
 		if mode=='CBC':
 			m=AES.MODE_CBC
 		if mode=='GCM':
@@ -114,19 +111,9 @@ def encrypt(algoritmo, mode, data):
 	else:
 		print("Algoritmo nao suportado. Aborting..")
 		sys.exit(0)
-	
-
-	# Store the salt somewhere in the file
-	#header = {'salt':salt}
-	#h=json.dumps(header)
-	#fout.write(salt+"\n")
 
 
-	# fout.write(cipher.encrypt(text))
 	encrypted = cipher.encrypt(text)
-	
-	# fin.close()
-	# fout.close()
 	
 	return encrypted, iv
 

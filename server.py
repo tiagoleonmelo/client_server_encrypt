@@ -260,7 +260,7 @@ class ClientHandler(asyncio.Protocol):
 			self.cipher = algs[0]
 			self.mode = algs[1]
 			self.sintese = algs[2]
-			
+
 		elif len(algs)==4:
 			#uses dh
 			if algs[0]!="DH" or algs[1] not in ("AES-128","3DES") or algs[2] not in ("CBC","GCM","ECB") or algs[3] not in ("SHA-256","SHA-512"):
@@ -285,6 +285,7 @@ class ClientHandler(asyncio.Protocol):
 		real_payload = base64.b64decode(payload.encode())
 
 		return decrypt(self.cipher, self.mode, real_payload, real_iv).decode()
+		
 
 	def process_close(self, message: str) -> bool:
 		"""

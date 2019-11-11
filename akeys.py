@@ -5,7 +5,7 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 
 # Generate some parameters. These can be reused.
-parameters = dh.generate_parameters(generator=200, key_size=512,
+parameters = dh.generate_parameters(generator=2, key_size=512,
                                     backend=default_backend())
 
 # print(parameters.parameters_to_bytes())
