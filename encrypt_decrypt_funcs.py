@@ -44,12 +44,13 @@ def decrypt(algoritmo, mode, filename, iv):
 
 	
 	if algoritmo == '3DES':
+		key= keyGen(24)
 		if mode=='CBC':
 			m=DES3.MODE_CBC
+			cipher = DES3.new(key, m,iv)
 		if mode=='ECB':
 			m=DES3.MODE_ECB
-		key= keyGen(24)
-		cipher = DES3.new(key, m)
+			cipher = DES3.new(key, m)
 		data = unpad(cipher.decrypt(txt), DES3.block_size)
 
 			
@@ -85,20 +86,23 @@ def encrypt(algoritmo, mode, filename):
 	fout = open(output_file, "wb")
 	txt = fin.read()
 
-	iv = get_random_bytes(16)
+	iv=0
 
 	if algoritmo == '3DES':
+		key= keyGen(24)
+		iv = get_random_bytes(8)
 		if mode=='CBC':
 			m=DES3.MODE_CBC
+			cipher = DES3.new(key, m,iv)
 		if mode=='ECB':
 			m=DES3.MODE_ECB
-		key= keyGen(24)
-		cipher = DES3.new(key, m)
+			cipher = DES3.new(key, m)
 		text= pad(txt,DES3.block_size)
 
 
 			
 	elif algoritmo == 'AES-128':
+		iv = get_random_bytes(16)
 		if mode=='CBC':
 			m=AES.MODE_CBC
 		if mode=='GCM':
@@ -118,17 +122,9 @@ def encrypt(algoritmo, mode, filename):
 	#header = {'salt':salt}
 	#h=json.dumps(header)
 	#fout.write(salt+"\n")
-				
-		
-	#enc = padder.update(txt)
-	encriptado = cipher.encrypt(text)
-	cipher2 = AES.new(key, m, iv)
-
-	data = unpad(cipher2.decrypt(encriptado), AES.block_size)
-	print(data)
 
 
-	fout.write(encriptado)
+	fout.write(cipher.encrypt(text))
 
 	
 	fin.close()
@@ -136,6 +132,6 @@ def encrypt(algoritmo, mode, filename):
 	return iv
 
 
-filename="raposa_uvas.txt"
-iv = encrypt('AES-128','CBC',filename)
-decrypt('AES-128','CBC',"encrypted_" + filename, iv)
+filename="ola.txt"
+iv = encrypt('AES-128','GCM',filename)
+decrypt('AES-128','GCM',"encrypted_" + filename, iv)
