@@ -10,6 +10,8 @@ from Crypto.Cipher import AES
 from cryptography.hazmat.primitives import padding
 from Crypto.Cipher import ChaCha20
 from Crypto.Util.Padding import pad, unpad
+from Crypto.Random import get_random_bytes
+
 
 def keyGen(size, salt=None):
 	pwd = getpass("Password?")
@@ -26,7 +28,7 @@ def keyGen(size, salt=None):
 	key = kdf.derive(pwd)
 	return key
 	
-def decrypt(algoritmo, mode, filename):
+def decrypt(algoritmo, mode, filename, iv):
 
 	fin = open(filename, "rb")
 	output_file = "decrypted_" + filename
@@ -57,7 +59,7 @@ def decrypt(algoritmo, mode, filename):
 		if mode=='GCM':
 			m=AES.MODE_GCM
 		key=keyGen(16)
-		cipher = AES.new(key, m)
+		cipher = AES.new(key, m, iv)
 		data = unpad(cipher.decrypt(txt), AES.block_size)
 		
 			
@@ -75,7 +77,6 @@ def decrypt(algoritmo, mode, filename):
 	return 0
 
 
-
 def encrypt(algoritmo, mode, filename):
 	#padder = padding.PKCS7(128).padder()
 	
@@ -84,7 +85,8 @@ def encrypt(algoritmo, mode, filename):
 	fout = open(output_file, "wb")
 	txt = fin.read()
 
-	
+	iv = get_random_bytes(16)
+
 	if algoritmo == '3DES':
 		if mode=='CBC':
 			m=DES3.MODE_CBC
@@ -92,7 +94,7 @@ def encrypt(algoritmo, mode, filename):
 			m=DES3.MODE_ECB
 		key= keyGen(24)
 		cipher = DES3.new(key, m)
-		text=pad(txt,DES3.block_size)
+		text= pad(txt,DES3.block_size)
 
 
 			
@@ -102,9 +104,11 @@ def encrypt(algoritmo, mode, filename):
 		if mode=='GCM':
 			m=AES.MODE_GCM
 		key= keyGen(16)
-		cipher = AES.new(key, m)
+		cipher = AES.new(key, m, iv)
 		text=pad(txt,AES.block_size)
-			
+
+
+	
 	else:
 		print("Algoritmo nao suportado. Aborting..")
 		sys.exit(0)
@@ -117,13 +121,21 @@ def encrypt(algoritmo, mode, filename):
 				
 		
 	#enc = padder.update(txt)
-	fout.write(cipher.encrypt(text))
+	encriptado = cipher.encrypt(text)
+	cipher2 = AES.new(key, m, iv)
+
+	data = unpad(cipher2.decrypt(encriptado), AES.block_size)
+	print(data)
+
+
+	fout.write(encriptado)
+
 	
 	fin.close()
 	fout.close()
-	return 0
+	return iv
 
 
-filename="ola.txt"
-encrypt('AES-128','CBC',filename)
-decrypt('AES-128','CBC',"encrypted_" + filename)
+filename="raposa_uvas.txt"
+iv = encrypt('AES-128','CBC',filename)
+decrypt('AES-128','CBC',"encrypted_" + filename, iv)

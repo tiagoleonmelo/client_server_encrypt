@@ -191,6 +191,10 @@ class ClientHandler(asyncio.Protocol):
 				return False
 
 			bdata = base64.b64decode(message['data'])
+			## Decode data here
+
+
+
 		except:
 			logger.exception("Could not decode base64 content from message.data")
 			return False

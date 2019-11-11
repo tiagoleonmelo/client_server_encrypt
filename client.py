@@ -38,7 +38,7 @@ class ClientProtocol(asyncio.Protocol):
         :param transport: The transport stream to use for this client
         :return: No return
         """
-        #################Estabilishing encryption process
+        #################Establishing encryption process
         algString=''
         #####
         dh=input("Use Diffie-Hellman?\n1)Yes\n2)No\n")
@@ -186,6 +186,10 @@ class ClientProtocol(asyncio.Protocol):
             read_size = 16 * 60
             while True:
                 data = f.read(16 * 60)
+                ## Aplicar aqui as funçoes de cifra e de sintese
+
+                
+
                 message['data'] = base64.b64encode(data).decode()
                 self._send(message)
 
