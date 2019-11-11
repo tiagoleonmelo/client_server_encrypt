@@ -7,6 +7,9 @@ import re
 import os
 from aio_tcpserver import tcp_server
 from encrypt_decrypt_funcs import *
+from cryptography.hazmat.primitives.serialization import load_pem_parameters, load_pem_public_key
+from cryptography.hazmat.primitives.serialization import Encoding, ParameterFormat, PublicFormat
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 logger = logging.getLogger('root')
 
@@ -32,10 +35,16 @@ class ClientHandler(asyncio.Protocol):
 		self.buffer = ''
 		self.peername = ''
 
+		## Diffie-Hellman
+		self.parameters = ''
+		self.private_key = ''
+		self.public_key = ''
+		self.derived_key = ''
+
+		## Cipher-suite
 		self.cipher = ''
 		self.mode = ''
 		self.sintese = ''
-        ## TODO: Pre-implementaçao de chaves publicas pq relatorio
 
 
 	def connection_made(self, transport) -> None:
@@ -228,6 +237,7 @@ class ClientHandler(asyncio.Protocol):
 
 		return True
 
+
 	def process_algorithms(self, message: str) -> bool:
 		"""
 		Processes a ALGORITHMS message from the client
@@ -241,7 +251,7 @@ class ClientHandler(asyncio.Protocol):
 		try:
 			data = message.get('alg_list', None)
 			if data is None:
-				logger.debug("Invalid message. No data found")
+				logger.warning("Invalid message. No data found")
 				return False
 
 			algList= message['alg_list']
@@ -251,32 +261,40 @@ class ClientHandler(asyncio.Protocol):
 
 		algs=algList.split(';')
 		logger.debug(algs)
-		if len(algs)==3:
-			if algs[0] not in ("AES-128","3DES") or algs[1] not in ("CBC","GCM","ECB") or algs[2] not in ("SHA-256","SHA-512"):
-				print('Unsupported algorithm, shutting down connection')
-				self.transport.close()
-				return False
 
-			self.cipher = algs[0]
-			self.mode = algs[1]
-			self.sintese = algs[2]
+		if algs[0]!="DH" or algs[1] not in ("AES-128","3DES") or algs[2] not in ("CBC","GCM","ECB") or algs[3] not in ("SHA-256","SHA-512"):
+			logger.error('Unsupported algorithm, shutting down connection')
+			self.transport.close()
+			return False
 
-		elif len(algs)==4:
-			#uses dh
-			if algs[0]!="DH" or algs[1] not in ("AES-128","3DES") or algs[2] not in ("CBC","GCM","ECB") or algs[3] not in ("SHA-256","SHA-512"):
-				print('Unsupported algorithm, shutting down connection')
-				self.transport.close()
-				return False
+		self.cipher = algs[1]
+		self.mode = algs[2]
+		self.sintese = algs[3]
 
-			self.cipher = algs[1]
-			self.mode = algs[2]
-			self.sintese = algs[3]
+		self.parameters = load_pem_parameters(base64.b64decode(message['params'].encode()), backend=default_backend())
+		self.private_key = self.parameters.generate_private_key()
+		self.public_key = self.private_key.public_key()
+
+		received_public_key = load_pem_public_key(base64.b64decode(message['public_key'].encode()), backend=default_backend())
+
+		shared_key = self.private_key.exchange(received_public_key)
+		self.derived_key = HKDF(
+								algorithm=hashes.SHA256(),
+								length=32,
+								salt=None,
+								info=b'handshake data',
+								backend=default_backend()
+							).derive(shared_key)
+
+
+		sendable_key = base64.b64encode(self.public_key.public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)).decode()
 
 		#
-		self._send({'type': 'OK'})
+		self._send({'type': 'EXCHANGE', 'value' : sendable_key})
 
 
 		return True
+
 
 	def process_payload(self, iv, payload: str) -> bool:
 
@@ -284,8 +302,8 @@ class ClientHandler(asyncio.Protocol):
 		real_iv = base64.b64decode(iv.encode())
 		real_payload = base64.b64decode(payload.encode())
 
-		return decrypt(self.cipher, self.mode, real_payload, real_iv).decode()
-		
+		return decrypt(self.cipher, self.mode, real_payload, real_iv, self.derived_key).decode()
+
 
 	def process_close(self, message: str) -> bool:
 		"""
@@ -317,6 +335,7 @@ class ClientHandler(asyncio.Protocol):
 
 		message_b = (json.dumps(message) + '\r\n').encode()
 		self.transport.write(message_b)
+
 
 def main():
 	global storage_dir

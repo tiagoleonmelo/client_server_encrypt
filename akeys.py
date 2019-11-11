@@ -8,7 +8,6 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 parameters = dh.generate_parameters(generator=2, key_size=512,
                                     backend=default_backend())
 
-# print(parameters.parameters_to_bytes())
 # Generate a private key for use in the exchange.
 server_private_key = parameters.generate_private_key()
 # In a real handshake the peer is a remote client. For this

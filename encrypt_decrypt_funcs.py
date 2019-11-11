@@ -14,9 +14,11 @@ from Crypto.Random import get_random_bytes
 from cryptography.hazmat.primitives import hashes
 from Crypto.Hash import SHA256, SHA512
 
-def keyGen(size, salt=None):
-	pwd = getpass("Password?")
-	pwd = pwd.encode()
+
+## Adapts pwd to a key with size size
+# TODO: Handle salts
+def keyGen(size, pwd, salt=None):
+
 	backend = default_backend()
 	
 	# Salts should be randomly generated
@@ -30,21 +32,11 @@ def keyGen(size, salt=None):
 	return key
 
 
-def decrypt(algoritmo, mode, data, iv):
-
-	# fin = open(filename, "rb")
-	# output_file = "decrypted_" + filename
-	# fout = open(output_file, "wb")
-
-	txt = data
-	
-	if isinstance(txt,list):
-		print(type(txt),len(txt),AES.block_size)
-		txt=bytes(txt)
-
+## Decrypts txt using algoritmo in mode mode, with IV iv and key pwd
+def decrypt(algoritmo, mode, txt, iv, pwd):
 	
 	if algoritmo == '3DES':
-		key= keyGen(24)
+		key= keyGen(24, pwd)
 		if mode=='CBC':
 			m=DES3.MODE_CBC
 			cipher = DES3.new(key, m,iv)
@@ -59,7 +51,7 @@ def decrypt(algoritmo, mode, data, iv):
 			m=AES.MODE_CBC
 		if mode=='GCM':
 			m=AES.MODE_GCM
-		key=keyGen(16)
+		key=keyGen(16, pwd)
 		cipher = AES.new(key, m, iv)
 		data = unpad(cipher.decrypt(txt), AES.block_size)
 		
@@ -68,24 +60,16 @@ def decrypt(algoritmo, mode, data, iv):
 		print("Algoritmo nao suportado. Aborting..")
 		sys.exit(0)	
 				
-		
-	
-
-	# fout.write(data)
-	
-	# fin.close()
-	# fout.close()
 	return data
 
 
-def encrypt(algoritmo, mode, data):
+## Encrypts txt using algoritmo in mode mode and key pwd, returns encrypted data and IV
+def encrypt(algoritmo, mode, txt, pwd):
 	
-	txt = data
-
 	iv = secrets.token_bytes(16)
 
 	if algoritmo == '3DES':
-		key= keyGen(24)
+		key= keyGen(24, pwd)
 		iv = secrets.token_bytes(8)
 		if mode=='CBC':
 			m=DES3.MODE_CBC
@@ -102,11 +86,9 @@ def encrypt(algoritmo, mode, data):
 			m=AES.MODE_CBC
 		if mode=='GCM':
 			m=AES.MODE_GCM
-		key= keyGen(16)
+		key= keyGen(16, pwd)
 		cipher = AES.new(key, m, iv)
 		text=pad(txt,AES.block_size)
-
-
 	
 	else:
 		print("Algoritmo nao suportado. Aborting..")
@@ -118,6 +100,7 @@ def encrypt(algoritmo, mode, data):
 	return encrypted, iv
 
 
+## Hashes data using algoritmo
 def sintese(algoritmo, data):
 
 	if algoritmo == "SHA-256":

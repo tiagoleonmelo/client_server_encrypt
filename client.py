@@ -9,8 +9,9 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import dh
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from cryptography.hazmat.primitives.serialization import Encoding, ParameterFormat
+from cryptography.hazmat.primitives.serialization import Encoding, ParameterFormat, PublicFormat
 from cryptography.hazmat.primitives.asymmetric.dh import DHParameters
+from cryptography.hazmat.primitives.serialization import load_pem_public_key
 
 logger = logging.getLogger('root')
 
@@ -18,6 +19,7 @@ STATE_CONNECT = 0
 STATE_OPEN = 1
 STATE_DATA = 2
 STATE_CLOSE = 3
+STATE_HANDSHAKE = 4
 
 
 class ClientProtocol(asyncio.Protocol):
@@ -37,15 +39,18 @@ class ClientProtocol(asyncio.Protocol):
         self.state = STATE_CONNECT  # Initial State
         self.buffer = ''  # Buffer to receive data chunks
 
+        ## Diffie-Hellman
         self.parameters = dh.generate_parameters(generator=2, key_size=512,
                                     backend=default_backend())
+        self.private_key = self.parameters.generate_private_key()
+        self.public_key = self.private_key.public_key()
+        self.derived_key = ''
 
-        
+        ## Cipher-suite
         self.cipher = ''
         self.mode = ''
         self.sintese = ''
         
-        ## TODO: Pre-implementaçao de chaves publicas pq relatorio
 
     def connection_made(self, transport) -> None:
         """
@@ -54,16 +59,10 @@ class ClientProtocol(asyncio.Protocol):
         :param transport: The transport stream to use for this client
         :return: No return
         """
-        #################Establishing encryption process
-        algString=''
+        #################Establishing ciphersuite
+        algString='DH;'
         #####
-        dh=input("Use Diffie-Hellman?\n1)Yes\n2)No\n")
-        dh=int(dh)
-        if dh not in (1,2):
-            exit(0)
-        if dh==1:
-            algString+='DH;'
-        #####
+
         alg=input("Encryption Algorithm?\n1)AES-128\n2)3DES\n")
         alg=int(alg)
         if alg not in (1,2):
@@ -106,17 +105,18 @@ class ClientProtocol(asyncio.Protocol):
         #####
         print(algString)
         #######################################
-        if dh==1:
-            pass #handle DH
+
         self.transport = transport
 
+
+        ## Starting handshake
         sendable_params = base64.b64encode(self.parameters.parameter_bytes(Encoding.PEM, ParameterFormat.PKCS3)).decode()
-
+        sendable_key = base64.b64encode(self.public_key.public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)).decode()
         
-        message = {'type': 'ALGORITHMS', 'alg_list': algString, 'params': sendable_params}
+        message = {'type': 'ALGORITHMS', 'alg_list': algString, 'params': sendable_params, 'public_key' : sendable_key}
         self._send(message)
-        logger.debug('Sent desired algorithms to server')
-
+        logger.debug('Sent ciphersuite and handshake data to server')
+        #
 
         message = {'type': 'OPEN', 'file_name': self.file_name}
         self._send(message)
@@ -150,7 +150,7 @@ class ClientProtocol(asyncio.Protocol):
             idx = self.buffer.find('\r\n')
 
         if len(self.buffer) > 4096 * 1024 * 1024:  # If buffer is larger than 4M
-            logger.warning('Buffer to large')
+            logger.warning('Buffer too large')
             self.buffer = ''
             self.transport.close()
 
@@ -176,11 +176,36 @@ class ClientProtocol(asyncio.Protocol):
             if self.state == STATE_OPEN:
                 logger.info("Channel open")
                 self.send_file(self.file_name)
-            elif self.state == STATE_DATA:  # Got an OK during a message transfer.
+            elif self.state == STATE_DATA:  # I dont know what were we supposed to do here
                 # Reserved for future use
                 pass
             else:
                 logger.warning("Ignoring message from server")
+            return
+
+        elif mtype == 'EXCHANGE': # Process rest of the handshake
+            
+            # Load server public key 
+            received_public_key = load_pem_public_key(
+                                    base64.b64decode(message['value'].encode()),
+                                    backend=default_backend()
+                                )
+
+            # Generate shared_key 
+            shared_key = self.private_key.exchange(received_public_key)
+
+            # Generate derived_key: this is our shared secret.
+            self.derived_key = HKDF(
+                                    algorithm=hashes.SHA256(),
+                                    length=32,
+                                    salt=None,
+                                    info=b'handshake data',
+                                    backend=default_backend()
+                                ).derive(shared_key)
+
+            # Update state
+            self.state = STATE_OPEN
+
             return
 
         elif mtype == 'ERROR':
@@ -232,16 +257,20 @@ class ClientProtocol(asyncio.Protocol):
         :return:
         """
 
-        if message['type'] != 'ALGORITHMS':
+        if message['type'] != 'ALGORITHMS' and self.state == STATE_OPEN:
 
             secure = {}
-            payload, iv = encrypt(self.cipher, self.mode, json.dumps(message).encode())
+            payload, iv = encrypt(self.cipher, self.mode, json.dumps(message).encode(), self.derived_key)
             
             secure['payload'] = base64.b64encode(payload).decode()
             secure['iv'] = base64.b64encode(iv).decode()
             secure['type'] = 'SECURE_X'
             secure['hash'] = sintese(self.sintese, json.dumps(message).encode()) # TODO: + self.resultado_DH
             message = secure
+
+        else:
+
+            self.state = STATE_HANDSHAKE
 
         logger.debug("Send: {}".format(message))
 
