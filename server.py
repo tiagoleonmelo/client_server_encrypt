@@ -41,6 +41,12 @@ class ClientHandler(asyncio.Protocol):
 		self.public_key = ''
 		self.derived_key = ''
 
+		## Supported features
+		self.supp_ciph = ['AES-128', '3DES']
+		self.supp_modes = ['GCM', 'CBC', 'ECB']
+		self.supp_hash = ['SHA-256', 'SHA-512']
+
+
 		## Cipher-suite
 		self.cipher = ''
 		self.mode = ''
@@ -116,7 +122,7 @@ class ClientHandler(asyncio.Protocol):
 			
 			hashed_msg = sintese(self.sintese, json.dumps(message).encode() + self.derived_key)
 			if hashed_msg != old_hash:
-				print("Error decoding message")
+				logger.error("Error decoding message")
 				# close connection
 				self.transport.close()
 
@@ -241,7 +247,7 @@ class ClientHandler(asyncio.Protocol):
 	def process_algorithms(self, message: str) -> bool:
 		"""
 		Processes a ALGORITHMS message from the client
-		This message should contain the list of algorithms to be used
+		This message should contain a list of ciphers, modes and hash functions supported by the client
 
 		:param message: The message to process
 		:return: Boolean indicating the success of the operation
@@ -249,27 +255,68 @@ class ClientHandler(asyncio.Protocol):
 		logger.debug("Process Algorithm List: {}".format(message))
 
 		try:
-			data = message.get('alg_list', None)
-			if data is None:
+			c = message.get('ciphers', None)
+			m = message.get('modes', None)
+			h = message.get('hash', None)
+
+			if c is None or m is None or h is None:
 				logger.warning("Invalid message. No data found")
 				return False
 
-			algList= message['alg_list']
+			ciphers = message['ciphers']
+			modes = message['modes']
+			hashs = message['hash']
+
 		except:
 			logger.exception("Could not decode base64 content from message.data")
 			return False
 
-		algs=algList.split(';')
-		logger.debug(algs)
+		
+		res_c = [c for c in ciphers if c in self.supp_ciph]
+		if res_c:
+			self.cipher = res_c[0]
+		else:
+			logger.exception("No cipher compatibility between client and server")
+			return False
+		
+		res_m = [c for c in modes if c in self.supp_modes]
+		if res_m:
+			if self.cipher == '3DES':
+				if 'CBC' in res_m:
+					self.mode = 'CBC'
 
-		if algs[0]!="DH" or algs[1] not in ("AES-128","3DES") or algs[2] not in ("CBC","GCM","ECB") or algs[3] not in ("SHA-256","SHA-512"):
-			logger.error('Unsupported algorithm, shutting down connection')
-			self.transport.close()
+				elif 'ECB' in res_m:
+					self.mode = 'ECB'
+
+				else:
+					logger.exception("No mode compatibility between client and server")
+					return False
+
+			if self.cipher == 'AES-128':
+				if 'CBC' in res_m:
+					self.mode = 'CBC'
+
+				elif 'GCM' in res_m:
+					self.mode = 'GCM'
+
+				else:
+					logger.exception("No mode compatibility between client and server")
+					return False					
+		else:
+			logger.exception("No mode compatibility between client and server")
 			return False
 
-		self.cipher = algs[1]
-		self.mode = algs[2]
-		self.sintese = algs[3]
+		res_h = [c for c in hashs if c in self.supp_hash]
+		if res_h:
+			self.sintese = res_h[0]
+		else:
+			logger.exception("No hash compatibility between client and server")
+			return False
+
+
+		ciphersuite = 'DH;' + self.cipher + ';' + self.mode + ';' + self.sintese
+		logger.debug(ciphersuite)
+
 
 		self.parameters = load_pem_parameters(base64.b64decode(message['params'].encode()), backend=default_backend())
 		self.private_key = self.parameters.generate_private_key()
@@ -290,7 +337,7 @@ class ClientHandler(asyncio.Protocol):
 		sendable_key = base64.b64encode(self.public_key.public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)).decode()
 
 		#
-		self._send({'type': 'EXCHANGE', 'value' : sendable_key})
+		self._send({'type': 'EXCHANGE', 'value' : sendable_key, 'ciphersuite': ciphersuite})
 
 
 		return True

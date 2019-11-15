@@ -20,6 +20,7 @@ STATE_OPEN = 1
 STATE_DATA = 2
 STATE_CLOSE = 3
 STATE_HANDSHAKE = 4
+AWAIT_HANDSHAKE = 5
 
 
 class ClientProtocol(asyncio.Protocol):
@@ -46,6 +47,12 @@ class ClientProtocol(asyncio.Protocol):
         self.public_key = self.private_key.public_key()
         self.derived_key = ''
 
+        ## Supported features
+        self.supp_ciph = ['AES-128', '3DES']
+        self.supp_modes = ['GCM', 'CBC', 'ECB']
+        self.supp_hash = ['SHA-256', 'SHA-512']
+
+
         ## Cipher-suite
         self.cipher = ''
         self.mode = ''
@@ -59,52 +66,6 @@ class ClientProtocol(asyncio.Protocol):
         :param transport: The transport stream to use for this client
         :return: No return
         """
-        #################Establishing ciphersuite
-        algString='DH;'
-        #####
-
-        alg=input("Encryption Algorithm?\n1)AES-128\n2)3DES\n")
-        alg=int(alg)
-        if alg not in (1,2):
-            exit(0)
-        if alg==1:
-            self.cipher="AES-128"
-        else:
-            self.cipher="3DES"
-
-        algString+=self.cipher+";"
-
-        #####
-        if alg==1:
-            mode=input("Encryption mode?\n1)CBC\n2)GCM\n")
-        else:
-            mode=input("Encryption mode?\n1)CBC\n2)ECB\n")
-        mode=int(mode)
-        if mode not in (1,2):
-            exit(0)
-        if mode==1:
-            self.mode="CBC"
-        else:
-            if alg==1:
-                self.mode="GCM"
-            else:
-                self.mode="ECB"
-
-        algString+=self.mode + ";"
-        #####
-        integ=input("Integrity control?\n1)SHA-256\n2)SHA-512\n")
-        integ=int(integ)
-        if integ not in (1,2):
-            exit(0)
-        if integ==1:
-            self.sintese = 'SHA-256'
-        else:
-            self.sintese = 'SHA-512'
-
-        algString+=self.sintese
-        #####
-        print(algString)
-        #######################################
 
         self.transport = transport
 
@@ -113,15 +74,24 @@ class ClientProtocol(asyncio.Protocol):
         sendable_params = base64.b64encode(self.parameters.parameter_bytes(Encoding.PEM, ParameterFormat.PKCS3)).decode()
         sendable_key = base64.b64encode(self.public_key.public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)).decode()
         
-        message = {'type': 'ALGORITHMS', 'alg_list': algString, 'params': sendable_params, 'public_key' : sendable_key}
+        message = {'type': 'ALGORITHMS',
+                    'ciphers': self.supp_ciph,
+                    'modes' : self.supp_modes,
+                    'hash' : self.supp_hash,
+                    'params': sendable_params,
+                    'public_key' : sendable_key
+                }
+
+                
         self._send(message)
         logger.debug('Sent ciphersuite and handshake data to server')
+        self.state = AWAIT_HANDSHAKE
         #
 
-        message = {'type': 'OPEN', 'file_name': self.file_name}
-        self._send(message)
+        ## TODO: AWAIT HERE A REPLY OF TYPE EXCHANGE FROM THE SERVER AND FINISH THE HANDSHAKE
+        # TODO: IMPLEMENT THE WHOLE HANDSHAKE WITH A FUNCION
 
-        self.state = STATE_OPEN
+
 
         message_b = (json.dumps(message) + '\r\n').encode()
         logger.debug('Connected to Server. Send: {}'.format(message))
@@ -203,7 +173,27 @@ class ClientProtocol(asyncio.Protocol):
                                     backend=default_backend()
                                 ).derive(shared_key)
 
-            # Update state
+            # Update Cipher, Mode and Hash Function
+            algs=message['ciphersuite'].split(';')
+            logger.debug(algs)
+
+            if algs[0]!="DH" or algs[1] not in ("AES-128","3DES") or algs[2] not in ("CBC","GCM","ECB") or algs[3] not in ("SHA-256","SHA-512"):
+                logger.error('Unsupported algorithm, shutting down connection')
+                self.transport.close()
+                return False
+
+            self.cipher = algs[1]
+            self.mode = algs[2]
+            self.sintese = algs[3]
+            # self.cipher = message['cipher']
+            # self.mode = message['mode']
+            # self.sintese = message['hash']
+
+                
+            # Everything is configured, we can now advanced the state and send the file
+            message = {'type': 'OPEN', 'file_name': self.file_name}
+            self._send(message)
+
             self.state = STATE_OPEN
 
             return
@@ -257,7 +247,7 @@ class ClientProtocol(asyncio.Protocol):
         :return:
         """
 
-        if message['type'] != 'ALGORITHMS' and self.state == STATE_OPEN:
+        if message['type'] != 'ALGORITHMS':
 
             secure = {}
             payload, iv = encrypt(self.cipher, self.mode, json.dumps(message).encode(), self.derived_key)
