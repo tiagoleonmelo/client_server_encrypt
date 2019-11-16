@@ -154,7 +154,7 @@ class ClientProtocol(asyncio.Protocol):
 
         elif mtype == 'EXCHANGE': # Process rest of the handshake
 
-            logger.debug('received excng')
+            logger.debug('received exchange')
             
             # Load server public key 
             received_public_key = load_pem_public_key(

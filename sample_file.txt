@@ -1,4 +1,4 @@
 Isto e um novo teste
 Tudo deveria funcionar
 Ha acordo de algoritmos
-Falta rotaçao de chaves
+Ha rotaçao de chaves

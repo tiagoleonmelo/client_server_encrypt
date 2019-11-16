@@ -15,15 +15,12 @@ from cryptography.hazmat.primitives import hashes
 from Crypto.Hash import SHA256, SHA512
 
 
-## Adapts pwd to a key with size size
-# TODO: Handle salts
+## Adapts pwd to a key of a certain size
 def keyGen(size, pwd, salt=None):
 
 	backend = default_backend()
 	
-	# Salts should be randomly generated
 	if salt==None:
-		#salt = os.urandom(16)
 		salt=b'10'
 	# derive
 	
