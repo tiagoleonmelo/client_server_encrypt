@@ -1,3 +1,4 @@
+import time
 import asyncio
 import json
 import base64
@@ -39,6 +40,10 @@ class ClientProtocol(asyncio.Protocol):
         self.loop = loop
         self.state = STATE_CONNECT  # Initial State
         self.buffer = ''  # Buffer to receive data chunks
+
+        self.counter = 0
+        self.first = True
+        self.offset = 0
 
         ## Diffie-Hellman
         self.parameters = dh.generate_parameters(generator=2, key_size=512,
@@ -87,13 +92,6 @@ class ClientProtocol(asyncio.Protocol):
         logger.debug('Sent ciphersuite and handshake data to server')
         self.state = AWAIT_HANDSHAKE
         #
-
-        ## TODO: AWAIT HERE A REPLY OF TYPE EXCHANGE FROM THE SERVER AND FINISH THE HANDSHAKE
-        # TODO: IMPLEMENT THE WHOLE HANDSHAKE WITH A FUNCION
-
-
-
-        message_b = (json.dumps(message) + '\r\n').encode()
         logger.debug('Connected to Server. Send: {}'.format(message))
 
     def data_received(self, data: str) -> None:
@@ -146,6 +144,7 @@ class ClientProtocol(asyncio.Protocol):
             if self.state == STATE_OPEN:
                 logger.info("Channel open")
                 self.send_file(self.file_name)
+                self.state = STATE_DATA
             elif self.state == STATE_DATA:  # I dont know what were we supposed to do here
                 # Reserved for future use
                 pass
@@ -154,6 +153,8 @@ class ClientProtocol(asyncio.Protocol):
             return
 
         elif mtype == 'EXCHANGE': # Process rest of the handshake
+
+            logger.debug('received excng')
             
             # Load server public key 
             received_public_key = load_pem_public_key(
@@ -185,19 +186,23 @@ class ClientProtocol(asyncio.Protocol):
             self.cipher = algs[1]
             self.mode = algs[2]
             self.sintese = algs[3]
-            # self.cipher = message['cipher']
-            # self.mode = message['mode']
-            # self.sintese = message['hash']
 
                 
             # Everything is configured, we can now advanced the state and send the file
-            message = {'type': 'OPEN', 'file_name': self.file_name}
-            self._send(message)
+            if self.first:
+                message = {'type': 'OPEN', 'file_name': self.file_name}
+                self._send(message)
+                self.first = False
 
-            self.state = STATE_OPEN
+                self.state = STATE_OPEN
+
+            else:
+                self.send_file(self.file_name)
+                self.state = STATE_OPEN
 
             return
 
+        
         elif mtype == 'ERROR':
             logger.warning("Got error from server: {}".format(message.get('data', None)))
         else:
@@ -226,7 +231,12 @@ class ClientProtocol(asyncio.Protocol):
         with open(file_name, 'rb') as f:
             message = {'type': 'DATA', 'data': None}
             read_size = 16 * 60
+            f.seek(self.offset)
             while True:
+                if self.state == AWAIT_HANDSHAKE:
+                    self.offset = f.tell()
+                    break
+
                 data = f.read(16 * 60)                
 
                 message['data'] = base64.b64encode(data).decode()
@@ -236,9 +246,11 @@ class ClientProtocol(asyncio.Protocol):
                 if len(data) != read_size:
                     break
 
-            self._send({'type': 'CLOSE'})
-            logger.info("File transferred. Closing transport")
-            self.transport.close()
+            if self.state != AWAIT_HANDSHAKE:
+
+                self._send({'type': 'CLOSE'})
+                logger.info("File transferred. Closing transport")
+                self.transport.close()
 
     def _send(self, message: str) -> None:
         """
@@ -247,7 +259,25 @@ class ClientProtocol(asyncio.Protocol):
         :return:
         """
 
-        if message['type'] != 'ALGORITHMS':
+        self.counter += 1
+
+        if self.counter == 21:
+            self.counter = 0
+            self.state = AWAIT_HANDSHAKE
+
+            sendable_params = base64.b64encode(self.parameters.parameter_bytes(Encoding.PEM, ParameterFormat.PKCS3)).decode()
+            sendable_key = base64.b64encode(self.public_key.public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)).decode()
+
+            message = {'type': 'ALGORITHMS',
+                        'ciphers': self.supp_ciph,
+                        'modes' : self.supp_modes,
+                        'hash' : self.supp_hash,
+                        'params': sendable_params,
+                        'public_key' : sendable_key
+                    }
+
+
+        elif message['type'] != 'ALGORITHMS':
 
             secure = {}
             payload, iv = encrypt(self.cipher, self.mode, json.dumps(message).encode(), self.derived_key)

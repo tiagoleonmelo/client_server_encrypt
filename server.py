@@ -1,3 +1,4 @@
+import time
 import asyncio
 import json
 import base64
@@ -34,6 +35,7 @@ class ClientHandler(asyncio.Protocol):
 		self.storage_dir = storage_dir
 		self.buffer = ''
 		self.peername = ''
+
 
 		## Diffie-Hellman
 		self.parameters = ''
@@ -241,6 +243,7 @@ class ClientHandler(asyncio.Protocol):
 			logger.exception("Could not write to file")
 			return False
 
+
 		return True
 
 
@@ -339,7 +342,6 @@ class ClientHandler(asyncio.Protocol):
 		#
 		self._send({'type': 'EXCHANGE', 'value' : sendable_key, 'ciphersuite': ciphersuite})
 
-
 		return True
 
 
@@ -378,11 +380,10 @@ class ClientHandler(asyncio.Protocol):
 		:param message:
 		:return:
 		"""
-		logger.debug("Send: {}".format(message))
 
+		logger.debug("Send: {}".format(message))
 		message_b = (json.dumps(message) + '\r\n').encode()
 		self.transport.write(message_b)
-
 
 def main():
 	global storage_dir
