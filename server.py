@@ -118,15 +118,8 @@ class ClientHandler(asyncio.Protocol):
 		mtype = message.get('type', "").upper()
 
 		if mtype == 'SECURE_X':
-			old_hash = message['hash']
-			message = self.process_payload(message['iv'], message['payload'])
+			message = self.process_payload(message['iv'], message['payload'], message['hash'])
 			message = json.loads(message)
-			
-			hashed_msg = sintese(self.sintese, json.dumps(message).encode() + self.derived_key)
-			if hashed_msg != old_hash:
-				logger.error("Error decoding message")
-				# close connection
-				self.transport.close()
 
 		mtype = message.get('type', "").upper()
 
@@ -345,11 +338,15 @@ class ClientHandler(asyncio.Protocol):
 		return True
 
 
-	def process_payload(self, iv, payload: str) -> bool:
+	def process_payload(self, iv, payload: str, mac) -> bool:
 
 		# Converting back to binary
 		real_iv = base64.b64decode(iv.encode())
 		real_payload = base64.b64decode(payload.encode())
+
+		if sintese(self.sintese, real_payload + self.derived_key) != mac:
+			logger.error('MAC Authentication failed, closing connection')
+			self.transport.close()
 
 		return decrypt(self.cipher, self.mode, real_payload, real_iv, self.derived_key).decode()
 
